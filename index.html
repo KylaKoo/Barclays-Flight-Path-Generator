@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Barclays Flight path generator</title>
+
+<!-- p5.js & p5.dom -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/addons/p5.dom.min.js"></script>
+
+<style>
+  /* ——— Font ——— */
+  @font-face{
+    font-family: 'BarclaysEffra';
+    src: url('./BarclaysEffra_Rg.ttf') format('truetype');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  :root{
+    --panel-w: 380px;                 /* wider sidebar */
+    --bg: #f7f9fb;
+    --panel-bg: #ffffff;
+    --ink: #0b1736;
+    --muted: #6b7280;
+    --blue: #0a84ff;
+    --blue-ink: #075fcc;
+    --line: #e5e7eb;
+    --radius: 14px;
+    --shadow: 0 6px 18px rgba(3,17,38,0.07);
+  }
+
+  html, body{
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'BarclaysEffra', system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'PingFang SC', 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif;
+  }
+
+  /* ——— Sidebar ——— */
+  #ui-root{
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: var(--panel-w);
+    background: var(--panel-bg);
+    border-right: 1px solid var(--line);
+    padding: 18px 16px 20px 16px;
+    box-sizing: border-box;
+    box-shadow: var(--shadow);
+    overflow: hidden; /* no scroll */
+  }
+
+  .app-title{
+    margin: 4px 0 8px;
+    font-size: 18px;
+    letter-spacing: .2px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .muted{
+    color: var(--muted);
+    font-size: 12px;
+    margin: 0 0 10px;
+  }
+
+  .section{
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 12px;
+    margin-bottom: 12px;
+    background: #fff;
+  }
+  .section h4{
+    margin: 0 0 10px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: .3px;
+    text-transform: uppercase;
+    color: var(--blue-ink);
+  }
+
+  /* ——— Controls ——— */
+  .btn, .select, .slider-wrap input[type="range"]{ width: 100%; }
+
+  .btn{
+    appearance: none;
+    border: 1px solid var(--line);
+    background: #f8fafc;
+    color: var(--ink);
+    padding: 10px 12px;
+    border-radius: 10px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: transform .04s ease, background .2s ease, border-color .2s ease, box-shadow .2s ease;
+    margin-bottom: 8px;
+  }
+  .btn:hover{ background: #f3f6fb; }
+  .btn:active{ transform: translateY(1px); }
+  .btn.primary{
+    background: var(--blue);
+    color: #fff;
+    border-color: transparent;
+  }
+  .btn.primary:hover{ background: #0a79eb; }
+  .btn.ghost{ background: #fff; }
+
+  .grid-2{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .grid-3{
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+  }
+
+  .select{
+    appearance: none;
+    border: 1px solid var(--line);
+    background: #fff;
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 14px;
+    color: var(--ink);
+    outline: none;
+    transition: box-shadow .2s ease, border-color .2s ease;
+    margin-bottom: 8px;
+  }
+  .select:focus{
+    border-color: rgba(10,132,255,.6);
+    box-shadow: 0 0 0 3px rgba(10,132,255,.15);
+  }
+
+  .slider-wrap{ margin-bottom: 10px; }
+  .slider-wrap label{
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  input[type="range"]{
+    appearance: none;
+    height: 6px;
+    border-radius: 999px;
+    background: #eef2f7;
+    outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb{
+    appearance: none;
+    width: 18px; height: 18px;
+    background: #fff;
+    border: 2px solid var(--blue);
+    border-radius: 50%;
+    box-shadow: 0 1px 4px rgba(3,17,38,0.15);
+    cursor: pointer;
+    transition: transform .08s ease;
+  }
+  input[type="range"]::-webkit-slider-thumb:active{ transform: scale(0.96); }
+
+  .hint{
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  /* ——— Canvas helper chip ——— */
+  .canvas-guide{
+    position: fixed;
+    left: calc(var(--panel-w) + 16px);
+    top: 14px;
+    background: rgba(255,255,255,.75);
+    backdrop-filter: blur(4px);
+    border: 1px solid var(--line);
+    color: var(--muted);
+    border-radius: 999px;
+    padding: 6px 10px;
+    font-size: 12px;
+    pointer-events: none;
+  }
+
+  @media (max-width: 1366px){
+    :root{ --panel-w: 400px; } /* keep no-scroll in most 1366×768 setups */
+  }
+</style>
+</head>
+<body>
+  <div class="canvas-guide">Drag anchors/handles · Export as PNG</div>
+  <div id="ui-root" aria-label="Controls sidebar"></div>
+
+<script>
+/* ================== App ================== */
+
+/** how much of the export-rect to fill; >1 means allow overflow past background */
+const FILL_FACTOR = 1.30;
+
+// ---------- UI / State ----------
+let panelW = getPanelWidth();
+let showEditor = true;
+
+let controlPoints = [];   // [{pos: p5.Vector, type:'anchor'|'handle'}]
+let draggingPoint = null;
+let dragOffset = { x: 0, y: 0 };
+let dragStartPos = null;  // for anchor-drag delta
+let selectedPreset = -1;
+let coordDiv;
+
+let sizeSlider, thinningSlider;
+let paletteSelect;
+let cnv;
+
+// export/draw area (right canvas, inset 100px on all sides)
+function getExportRect() {
+  return { x: 100, y: 100, w: width - 200, h: height - 200 };
+}
+
+// 7 gradient palettes
+const palettes = [
+  { name: 'Cyan → Bright Blue', a: '#53B5F8', b: '#088AFF' },
+  { name: 'Cyan → Dark Blue',   a: '#53B5F8', b: '#001276' },
+  { name: 'Cyan → Mint',        a: '#53B5F8', b: '#AFFDFD' }, // default
+  { name: 'Cyan → Orange',      a: '#53B5F8', b: '#F6CAC9' },
+  { name: 'Cyan → Green',       a: '#53B5F8', b: '#75FAAC' },
+  { name: 'Cyan → Pink',        a: '#53B5F8', b: '#EDC1FA' },
+  { name: 'Cyan → Yellow',      a: '#53B5F8', b: '#FCF593' },
+];
+
+// for Sweep thickness profile switch
+let currentProfile = 'ends-thick'; // 'ends-thick' | 'thin-to-thick'
+
+// ---------- Setup ----------
+function setup() {
+  panelW = getPanelWidth();
+  // canvas sits to the right of sidebar and fills remaining space
+  cnv = createCanvas(windowWidth - panelW, windowHeight);
+  cnv.position(panelW, 0);
+  pixelDensity(2);
+  buildUI();
+
+  // default preset
+  selectedPreset = 0;
+  loadPreset(0);
+}
+
+function windowResized(){
+  panelW = getPanelWidth();
+  resizeCanvas(windowWidth - panelW, windowHeight);
+  cnv.position(panelW, 0);
+  fitAndCenterPath(FILL_FACTOR);  // keep scale & centering on resize
+}
+
+function getPanelWidth(){
+  const css = getComputedStyle(document.documentElement).getPropertyValue('--panel-w');
+  const n = parseInt(css, 10);
+  return Number.isFinite(n) ? n : 380;
+}
+
+// ---------- UI ----------
+function buildUI() {
+  const root = select('#ui-root');
+
+  const title = createElement('div', 'Barclays Flight path generator')
+    .class('app-title').parent(root);
+
+  const subtitle = createElement('div', 'Bezier path · gradient strokes · PNG export')
+    .class('muted').parent(root);
+
+  // Editor
+  const secEditor = createDiv().parent(root);
+  secEditor.class('section');
+  createElement('h4', 'Editor').parent(secEditor);
+  createButton('👁 Toggle Editor').class('btn ghost').parent(secEditor)
+    .mousePressed(() => { showEditor = !showEditor; });
+
+  // Presets (3 columns)
+  const secPresets = createDiv().parent(root);
+  secPresets.class('section');
+  createElement('h4', 'Presets').parent(secPresets);
+
+  const names = ['Soar', 'Glide', 'Swoop', 'Twist', 'Sweep', 'Launch'];
+  const grid = createDiv().parent(secPresets);
+  grid.class('grid-3');
+
+  names.forEach((n, i) => {
+    const btn = createButton(n).parent(grid);
+    btn.class('btn');
+    btn.mousePressed(() => { selectedPreset = i; loadPreset(i); });
+  });
+
+  // Gradient
+  const secGrad = createDiv().parent(root);
+  secGrad.class('section');
+  createElement('h4', 'Gradient Palette').parent(secGrad);
+  paletteSelect = createSelect().parent(secGrad);
+  paletteSelect.class('select');
+  palettes.forEach((p, idx) => paletteSelect.option(p.name, idx));
+  paletteSelect.selected(2);
+
+  // Brush
+  const secBrush = createDiv().parent(root);
+  secBrush.class('section');
+  createElement('h4', 'Brush').parent(secBrush);
+
+  const sizeWrap = createDiv().parent(secBrush); sizeWrap.class('slider-wrap');
+  const sizeLabel = createElement('label'); sizeLabel.parent(sizeWrap);
+  sizeLabel.html('<span>Stroke Size</span><span id="sizeVal">90</span>');
+  sizeSlider = createSlider(30, 220, 90, 1).parent(sizeWrap);
+  sizeSlider.input(() => select('#sizeVal').html(sizeSlider.value()));
+
+  const thinWrap = createDiv().parent(secBrush); thinWrap.class('slider-wrap');
+  const thinLabel = createElement('label'); thinLabel.parent(thinWrap);
+  thinLabel.html('<span>Thinning</span><span id="thinVal">0.95</span>');
+  thinningSlider = createSlider(0.1, 1.0, 0.95, 0.05).parent(thinWrap);
+  thinningSlider.input(() => select('#thinVal').html(thinningSlider.value()));
+
+  // Export (two buttons inline)
+  const secExport = createDiv().parent(root);
+  secExport.class('section');
+  createElement('h4', 'Export').parent(secExport);
+  const row = createDiv().parent(secExport); row.class('grid-2');
+  createButton('💾 PNG (Background)').parent(row).class('btn primary')
+    .mousePressed(() => savePNGCropped(true));
+  createButton('💾 PNG (Transparent)').parent(row).class('btn')
+    .mousePressed(() => savePNGCropped(false));
+
+  createDiv('Export region = centered area with 100px inset.')
+    .class('hint').parent(secExport);
+}
+
+// ---------- Presets & geometry ----------
+function P(x, y, type) { return { pos: createVector(x, y), type }; }
+
+function loadPreset(index) {
+  controlPoints = [];
+  currentProfile = (index === 4) ? 'thin-to-thick' : 'ends-thick'; // Sweep special
+
+  if (index === 0) {
+    // Soar
+    controlPoints = [
+      P(362.0, 646.5, 'anchor'),
+      P(276.0, 321.5, 'handle'),
+      P(282.0, 197.0, 'handle'),
+      P(410.0, 410.5, 'anchor'),
+      P(538.0, 624.0, 'handle'),
+      P(979.0, 536.5, 'handle'),
+      P(789.0, 58.5, 'anchor'),
+    ];
+  } else if (index === 1) {
+    // Glide
+    controlPoints = [
+      P(250.0, 360.5, 'anchor'),
+      P(350.9, 492.5, 'handle'),
+      P(843.8, 627.5, 'handle'),
+      P(871.0, 59.5,  'anchor'),
+    ];
+  } else if (index === 2) {
+    // Swoop
+    controlPoints = [
+      P(227.0, 398.5, 'anchor'),
+      P(374.0, 404.3, 'handle'),
+      P(412.8, 172.8, 'handle'),
+      P(445.6, 192.9, 'anchor'),
+      P(478.4, 213.0, 'handle'),
+      P(372.1, 528.6, 'handle'),
+      P(418.9, 527.5, 'anchor'),
+      P(509.4, 529.3, 'handle'),
+      P(641.9, 201.0, 'handle'),
+      P(1022.0, 198.5, 'anchor'),
+    ];
+  } else if (index === 3) {
+    // Twist
+    controlPoints = [
+      P(220.0, 124.5, 'anchor'),
+      P(503.0, 138.5, 'handle'),
+      P(772.5, 188.5, 'handle'),
+      P(507.5, 366.5, 'anchor'),
+      P(242.5, 544.5, 'handle'),
+      P(752.0, 635.5, 'handle'),
+      P(1045.0, 147.5, 'anchor'),
+    ];
+  } else if (index === 4) {
+    // Sweep (thin->thick)
+    controlPoints = [
+      P(434.0, 79.5, 'anchor'),
+      P(171.9, 383.5, 'handle'),
+      P(382.8, 555.5, 'handle'),
+      P(1017.0, 242.5, 'anchor'),
+    ];
+  } else if (index === 5) {
+    // Launch
+    controlPoints = [
+      P(610.0, 37.5,  'anchor'),
+      P(150.0, 355.5, 'handle'),
+      P(773.5, 265.5, 'handle'),
+      P(778.5, 335.5, 'anchor'),
+      P(783.5, 405.5, 'handle'),
+      P(515.0, 476.5, 'handle'),
+      P(206.0, 484.5, 'anchor'),
+    ];
+  }
+
+  fitAndCenterPath(FILL_FACTOR); // ← scale + center with controlled overflow
+}
+
+/** Fit current controlPoints to export-rect with uniform scale, then center.
+ *  fill > 1.0 allows ends to extend beyond the background (still within canvas).
+ */
+function fitAndCenterPath(fill = FILL_FACTOR){
+  if (!controlPoints.length) return;
+
+  // 1) bbox of current points
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  controlPoints.forEach(pt => {
+    minX = Math.min(minX, pt.pos.x);
+    minY = Math.min(minY, pt.pos.y);
+    maxX = Math.max(maxX, pt.pos.x);
+    maxY = Math.max(maxY, pt.pos.y);
+  });
+  const bboxW = Math.max(1, maxX - minX);
+  const bboxH = Math.max(1, maxY - minY);
+  const cx = minX + bboxW/2;
+  const cy = minY + bboxH/2;
+
+  // 2) compute target uniform scale to (over)fill export rect
+  const exp = getExportRect();
+  const scale = Math.min(exp.w / bboxW, exp.h / bboxH) * fill;
+
+  // 3) scale about bbox center
+  controlPoints.forEach(pt => {
+    pt.pos.x = cx + (pt.pos.x - cx) * scale;
+    pt.pos.y = cy + (pt.pos.y - cy) * scale;
+  });
+
+  // 4) recalc center, then translate to export center
+  let nminX = Infinity, nminY = Infinity, nmaxX = -Infinity, nmaxY = -Infinity;
+  controlPoints.forEach(pt => {
+    nminX = Math.min(nminX, pt.pos.x);
+    nminY = Math.min(nminY, pt.pos.y);
+    nmaxX = Math.max(nmaxX, pt.pos.x);
+    nmaxY = Math.max(nmaxY, pt.pos.y);
+  });
+  const ncx = nminX + (nmaxX - nminX)/2;
+  const ncy = nminY + (nmaxY - nminY)/2;
+  const expCx = exp.x + exp.w/2;
+  const expCy = exp.y + exp.h/2;
+  const dx = expCx - ncx;
+  const dy = expCy - ncy;
+
+  controlPoints.forEach(pt => {
+    // clamp to canvas (can exceed export-rect, but not the canvas)
+    pt.pos.x = Math.max(0, Math.min(width,  pt.pos.x + dx));
+    pt.pos.y = Math.max(0, Math.min(height, pt.pos.y + dy));
+  });
+}
+
+// ---------- Editor / Interaction ----------
+function draw() {
+  // 1) Background gradient only inside exportRect
+  drawBackgroundInsideExportRect();
+
+  // 2) Sample path from control points
+  const path = sampleBezierPath(controlPoints);
+
+  // 3) Draw brush
+  if (path.length > 2) drawFilledBrushGradient(path);
+
+  // 4) Editor overlay (toggle-able)
+  if (showEditor) drawEditorOverlay();
+
+  // 5) coordinate listing (optional)
+  if (showEditor) updateCoordDisplay(); else coordDiv?.html && coordDiv.html('(editor hidden)');
+}
+
+// background gradient only inside exportRect
+function drawBackgroundInsideExportRect(g = this) {
+  const exp = getExportRect();
+  // checkerboard outside export area
+  background(245);
+  noStroke();
+  const cell = 20;
+  for (let y = 0; y < height; y += cell) {
+    for (let x = 0; x < width; x += cell) {
+      fill(((x/cell + y/cell) % 2) ? 235 : 255);
+      rect(x, y, cell, cell);
+    }
+  }
+
+  // gradient within export rect
+  const pal = palettes[+paletteSelect.value() || 0];
+  const colA = color(pal.a);
+  const colB = color(pal.b);
+
+  for (let y = 0; y < exp.h; y++) {
+    const t = y / (exp.h - 1);
+    const c = lerpColor(colA, colB, t * 0.8);
+    g.stroke(c);
+    g.line(exp.x, exp.y + y, exp.x + exp.w, exp.y + y);
+  }
+}
+
+// draw editor overlay: curves, control lines, points
+function drawEditorOverlay() {
+  if (controlPoints.length < 4) return;
+
+  // Curve
+  noFill();
+  stroke(0, 0, 0, 160);
+  strokeWeight(2);
+  for (let i = 0; i <= controlPoints.length - 4; i += 3) {
+    const p0 = controlPoints[i].pos;
+    const p1 = controlPoints[i + 1].pos;
+    const p2 = controlPoints[i + 2].pos;
+    const p3 = controlPoints[i + 3].pos;
+    bezier(p0.x, p0.y, p1.x, p1.y, p2.x, p2.y, p3.x, p3.y);
+  }
+
+  // Control lines
+  stroke(120, 120, 120, 120);
+  strokeWeight(1);
+  for (let i = 0; i <= controlPoints.length - 4; i += 3) {
+    const a0 = controlPoints[i].pos;
+    const h1 = controlPoints[i + 1].pos;
+    const h2 = controlPoints[i + 2].pos;
+    const a1 = controlPoints[i + 3].pos;
+    line(a0.x, a0.y, h1.x, h1.y);
+    line(a1.x, a1.y, h2.x, h2.y);
+  }
+
+  // Points
+  noStroke();
+  for (let idx = 0; idx < controlPoints.length; idx++) {
+    const pt = controlPoints[idx];
+    fill(pt.type === 'anchor' ? '#0a84ff' : '#ff8a3d');
+    circle(pt.pos.x, pt.pos.y, 10);
+  }
+}
+
+// mouse interactions with clamping + anchor/handle logic
+function mousePressed() {
+  if (!showEditor) return;
+  for (const pt of controlPoints) {
+    if (dist(mouseX, mouseY, pt.pos.x, pt.pos.y) < 10) {
+      draggingPoint = pt;
+      dragOffset.x = mouseX - pt.pos.x;
+      dragOffset.y = mouseY - pt.pos.y;
+      dragStartPos = pt.pos.copy();
+      break;
+    }
+  }
+}
+
+function mouseDragged() {
+  if (!draggingPoint || !showEditor) return;
+
+  // move current point within canvas bounds
+  draggingPoint.pos.x = clamp(mouseX - dragOffset.x, 0, width);
+  draggingPoint.pos.y = clamp(mouseY - dragOffset.y, 0, height);
+
+  const idx = controlPoints.indexOf(draggingPoint);
+
+  // 1) dragging anchor moves adjacent handles
+  if (draggingPoint.type === 'anchor') {
+    const delta = p5.Vector.sub(draggingPoint.pos, dragStartPos);
+    const leftIdx  = idx - 1;
+    const rightIdx = idx + 1;
+    if (controlPoints[leftIdx]?.type === 'handle') {
+      controlPoints[leftIdx].pos.add(delta);
+      controlPoints[leftIdx].pos.x = clamp(controlPoints[leftIdx].pos.x, 0, width);
+      controlPoints[leftIdx].pos.y = clamp(controlPoints[leftIdx].pos.y, 0, height);
+    }
+    if (controlPoints[rightIdx]?.type === 'handle') {
+      controlPoints[rightIdx].pos.add(delta);
+      controlPoints[rightIdx].pos.x = clamp(controlPoints[rightIdx].pos.x, 0, width);
+      controlPoints[rightIdx].pos.y = clamp(controlPoints[rightIdx].pos.y, 0, height);
+    }
+    dragStartPos = draggingPoint.pos.copy();
+  }
+
+  // 2) dragging handle mirrors the opposite handle around anchor
+  for (let anchorIdx = 0; anchorIdx < controlPoints.length; anchorIdx++) {
+    if (controlPoints[anchorIdx]?.type !== 'anchor') continue;
+    const leftIdx  = anchorIdx - 1;
+    const rightIdx = anchorIdx + 1;
+    const leftIsHandle  = controlPoints[leftIdx]?.type  === 'handle';
+    const rightIsHandle = controlPoints[rightIdx]?.type === 'handle';
+    if (!leftIsHandle || !rightIsHandle) continue;
+    if (idx !== leftIdx && idx !== rightIdx) continue;
+
+    const anchorPos = controlPoints[anchorIdx].pos;
+    const draggedPos = draggingPoint.pos;
+
+    const v = p5.Vector.sub(draggedPos, anchorPos);
+    const mirror = p5.Vector.sub(anchorPos, v);
+
+    const otherIdx = (idx === leftIdx) ? rightIdx : leftIdx;
+    controlPoints[otherIdx].pos.set(
+      clamp(mirror.x, 0, width),
+      clamp(mirror.y, 0, height)
+    );
+  }
+}
+
+function mouseReleased() {
+  draggingPoint = null;
+  dragStartPos = null;
+}
+
+function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+// ---------- Path sampling & Brush rendering ----------
+function sampleBezierPath(points) {
+  const sampled = [];
+  if (points.length < 4) return sampled;
+  const step = 0.01; // density
+
+  for (let i = 0; i <= points.length - 4; i += 3) {
+    const p0 = points[i].pos.copy();
+    const p1 = points[i + 1].pos.copy();
+    const p2 = points[i + 2].pos.copy();
+    const p3 = points[i + 3].pos.copy();
+
+    for (let t = 0; t <= 1.00001; t += step) {
+      if (i > 0 && t === 0) continue; // avoid duplicate at joints
+      const x = bezierPoint(p0.x, p1.x, p2.x, p3.x, t);
+      const y = bezierPoint(p0.y, p1.y, p2.y, p3.y, t);
+      sampled.push(createVector(x, y));
+    }
+  }
+  return sampled;
+}
+
+// thickness profiles
+function widthFactor(t, profile, thinning) {
+  if (profile === 'thin-to-thick') {
+    const f = t;
+    return (1 - thinning) + thinning * f;
+  } else {
+    const dip = 1 - sin(t * PI); // 1 at ends, 0 at middle
+    return (1 - thinning) + thinning * dip;
+  }
+}
+
+function drawFilledBrushGradient(path, g = this) {
+  if (path.length < 3) return;
+
+  const s = sizeSlider?.value() ?? 90;
+  const thinning = thinningSlider?.value() ?? 0.8;
+  const pal = palettes[+paletteSelect.value() || 0];
+
+  // Line gradient: start uses second color, end uses first color
+  const colStart = color(pal.b);
+  const colEnd   = color(pal.a);
+
+  g.noStroke();
+
+  for (let i = 1; i < path.length - 2; i++) {
+    const prev  = path[i - 1];
+    const curr  = path[i];
+    const next  = path[i + 1];
+    const after = path[i + 2];
+
+    const t1 = i / (path.length - 1);
+    const t2 = (i + 1) / (path.length - 1);
+
+    const f1 = widthFactor(t1, currentProfile, thinning);
+    const f2 = widthFactor(t2, currentProfile, thinning);
+
+    const w1 = s * f1;
+    const w2 = s * f2;
+
+    const dir1 = p5.Vector.sub(next, prev).normalize();
+    const dir2 = p5.Vector.sub(after, curr).normalize();
+
+    const n1 = createVector(-dir1.y, dir1.x);
+    const n2 = createVector(-dir2.y, dir2.x);
+
+    const p1a = p5.Vector.add(curr, n1.copy().mult(w1 / 2));
+    const p1b = p5.Vector.sub(curr, n1.copy().mult(w1 / 2));
+    const p2a = p5.Vector.add(next, n2.copy().mult(w2 / 2));
+    const p2b = p5.Vector.sub(next, n2.copy().mult(w2 / 2));
+
+    const fillCol = lerpColor(colStart, colEnd, t1);
+    g.fill(fillCol);
+
+    g.beginShape();
+    g.vertex(p1a.x, p1a.y);
+    g.vertex(p2a.x, p2a.y);
+    g.vertex(p2b.x, p2b.y);
+    g.vertex(p1b.x, p1b.y);
+    g.endShape(CLOSE);
+  }
+}
+
+// ---------- Export cropped to exportRect ----------
+function savePNGCropped(withBg = true) {
+  const exp = getExportRect();
+  const pg = createGraphics(exp.w, exp.h);
+  if (withBg) {
+    const pal = palettes[+paletteSelect.value() || 0];
+    const colA = color(pal.a);
+    const colB = color(pal.b);
+    for (let y = 0; y < exp.h; y++) {
+      const t = y / (exp.h - 1);
+      const c = lerpColor(colA, colB, t * 0.2);
+      pg.stroke(c);
+      pg.line(0, y, exp.w, y);
+    }
+  } else {
+    pg.clear();
+  }
+
+  const path = sampleBezierPath(controlPoints);
+  if (path.length > 2) {
+    drawBrushIntoGraphics(path, pg, -exp.x, -exp.y);
+  }
+
+  save(pg, withBg ? 'brushWithBackground.png' : 'brushTransparent.png');
+}
+
+function drawBrushIntoGraphics(path, g, dx, dy) {
+  const s = sizeSlider?.value() ?? 90;
+  const thinning = thinningSlider?.value() ?? 0.8;
+  const pal = palettes[+paletteSelect.value() || 0];
+
+  const colStart = color(pal.b);
+  const colEnd   = color(pal.a);
+
+  g.noStroke();
+
+  for (let i = 1; i < path.length - 2; i++) {
+    const prev  = path[i - 1];
+    const curr  = path[i];
+    const next  = path[i + 1];
+    const after = path[i + 2];
+
+    const t1 = i / (path.length - 1);
+    const t2 = (i + 1) / (path.length - 1);
+
+    const f1 = widthFactor(t1, currentProfile, thinning);
+    const f2 = widthFactor(t2, currentProfile, thinning);
+
+    const w1 = s * f1;
+    const w2 = s * f2;
+
+    const dir1 = p5.Vector.sub(next, prev).normalize();
+    const dir2 = p5.Vector.sub(after, curr).normalize();
+
+    const n1 = createVector(-dir1.y, dir1.x);
+    const n2 = createVector(-dir2.y, dir2.x);
+
+    const p1a = p5.Vector.add(curr, n1.copy().mult(w1 / 2));
+    const p1b = p5.Vector.sub(curr, n1.copy().mult(w1 / 2));
+    const p2a = p5.Vector.add(next, n2.copy().mult(w2 / 2));
+    const p2b = p5.Vector.sub(next, n2.copy().mult(w2 / 2));
+
+    const fillCol = lerpColor(colStart, colEnd, t1);
+    g.fill(fillCol);
+
+    g.beginShape();
+    g.vertex(p1a.x + dx, p1a.y + dy);
+    g.vertex(p2a.x + dx, p2a.y + dy);
+    g.vertex(p2b.x + dx, p2b.y + dy);
+    g.vertex(p1b.x + dx, p1b.y + dy);
+    g.endShape(CLOSE);
+  }
+}
+
+// ---------- Coords (optional debug) ----------
+function updateCoordDisplay() {
+  if (!coordDiv) return;
+  let txt = '';
+  controlPoints.forEach((pt, i) => {
+    txt += `${i}: ${pt.type.toUpperCase()}  (${pt.pos.x.toFixed(1)}, ${pt.pos.y.toFixed(1)})\n`;
+  });
+  coordDiv?.html(txt);
+}
+</script>
+</body>
+</html>
